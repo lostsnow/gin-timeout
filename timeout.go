@@ -3,7 +3,6 @@ package timeout
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"runtime/debug"
 	"time"
@@ -24,6 +23,11 @@ func init() {
 		Timeout:        3 * time.Second,
 		Response:       defaultResponse,
 	}
+}
+
+type PanicInfo struct {
+	Value any    `json:"value"`
+	Stack string `json:"stack"`
 }
 
 func Timeout(opts ...Option) gin.HandlerFunc {
@@ -62,12 +66,14 @@ func Timeout(opts ...Option) gin.HandlerFunc {
 		// Otherwise, if the parent coroutine quit due to timeout,
 		// the child coroutine may never be able to quit.
 		finish := make(chan struct{}, 1)
-		panicChan := make(chan interface{}, 1)
+		panicInfoChan := make(chan any, 1)
 		go func() {
 			defer func() {
 				if p := recover(); p != nil {
-					err := fmt.Errorf("gin-timeout recover:%v, stack: \n :%v", p, string(debug.Stack()))
-					panicChan <- err
+					panicInfoChan <- PanicInfo{
+						Value: p,
+						Stack: string(debug.Stack()),
+					}
 				}
 			}()
 			cp.Next()
@@ -77,7 +83,7 @@ func Timeout(opts ...Option) gin.HandlerFunc {
 		var err error
 		var n int
 		select {
-		case p := <-panicChan:
+		case p := <-panicInfoChan:
 			panic(p)
 
 		case <-ctx.Done():

@@ -19,7 +19,9 @@ func MyRecovery() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if p := recover(); p != nil {
-				log.Printf("unknow error:%v\n", p)
+				info := p.(timeout.PanicInfo)
+				log.Printf("unknow error:%v\n", info.Value)
+				log.Printf("stack:%v\n", info.Stack)
 				c.AbortWithStatusJSON(http.StatusInternalServerError,
 					errResponse{Code: -1, Msg: fmt.Sprintf("unknow error:%v", p)})
 				return
@@ -42,8 +44,12 @@ func main() {
 	})
 	router.GET("/panic", func(c *gin.Context) {
 		time.Sleep(1 * time.Second)
-		x := 0
-		fmt.Println(100 / x)
+		dive()
 	})
 	log.Fatal(router.Run(":8080"))
+}
+
+func dive() {
+	x := 0
+	fmt.Println(100 / x)
 }
